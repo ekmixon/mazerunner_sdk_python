@@ -210,7 +210,7 @@ class APITest(object):
         assert any(entity.name == entity_name for entity in collection)
 
     def assert_entity_name_not_in_collection(self, entity_name, collection):
-        assert not any(entity.name == entity_name for entity in collection)
+        assert all(entity.name != entity_name for entity in collection)
 
 
 SSH_GROUP_NAME = "ssh_deployment_group"
@@ -236,12 +236,12 @@ class TestGeneralFlow(APITest):
 
         # Create deployment group:
         assert {dg.id for dg in self.deployment_groups} == \
-               set(ENTITIES_CONFIGURATION[DeploymentGroup])
+                   set(ENTITIES_CONFIGURATION[DeploymentGroup])
         deployment_group = self.deployment_groups.create(name=SSH_GROUP_NAME,
                                                          description="test deployment group")
         self.assert_entity_name_in_collection(SSH_GROUP_NAME, self.deployment_groups)
         assert {dg.id for dg in self.deployment_groups} == \
-            set(ENTITIES_CONFIGURATION[DeploymentGroup] + [deployment_group.id])
+                set(ENTITIES_CONFIGURATION[DeploymentGroup] + [deployment_group.id])
 
         # Create breadcrumb:
         assert len(self.breadcrumbs) == 0
@@ -304,8 +304,10 @@ class TestGeneralFlow(APITest):
                               os="Windows",
                               download_type="install",
                               download_format=download_format)
-        self.file_paths_for_cleanup.append("{}.{}".format(deployment_file_path,
-                                                          download_format.lower()))
+        self.file_paths_for_cleanup.append(
+            f"{deployment_file_path}.{download_format.lower()}"
+        )
+
 
         # Add / remove deployment group:
         breadcrumb_ssh.remove_from_group(deployment_group.id)
@@ -396,7 +398,7 @@ class TestDecoy(APITest):
         wait_until(ova_decoy.download, location_with_name=download_file_path,
                    check_return_value=False, exc_list=[ValidationError], total_timeout=60*10)
 
-        self.file_paths_for_cleanup.append("{}.ova".format(download_file_path))
+        self.file_paths_for_cleanup.append(f"{download_file_path}.ova")
 
     def test_decoy_update(self):
         def _assert_expected_values():
@@ -538,7 +540,7 @@ class TestDeploymentGroups(APITest):
         self.power_on_decoy(decoy_ssh)
 
         def _has_complete_bg_tasks():
-            return len([bg_task for bg_task in self.background_tasks.filter(running=False)]) > 0
+            return len(list(self.background_tasks.filter(running=False))) > 0
 
         def _wait_and_destroy_background_task():
             wait_until(_has_complete_bg_tasks, check_return_value=True)
@@ -644,9 +646,11 @@ class TestCollections(APITest):
     def test_pagination(self):
         breadcrumbs_to_create = 55
 
-        created_breadcrumbs_names = ['%s_%s' % (SSH_BREADCRUMB_NAME, breadcrumb_num)
-                                     for breadcrumb_num
-                                     in range(breadcrumbs_to_create)]
+        created_breadcrumbs_names = [
+            f'{SSH_BREADCRUMB_NAME}_{breadcrumb_num}'
+            for breadcrumb_num in range(breadcrumbs_to_create)
+        ]
+
 
         for breadcrumb_name in created_breadcrumbs_names:
             self.breadcrumbs.create(name=breadcrumb_name,
@@ -655,7 +659,7 @@ class TestCollections(APITest):
                                     password="ssh_pass")
 
         assert len(self.breadcrumbs) == breadcrumbs_to_create
-        fetched_breadcrumbs = [breadcrumb for breadcrumb in self.breadcrumbs]
+        fetched_breadcrumbs = list(self.breadcrumbs)
         assert len(fetched_breadcrumbs) == breadcrumbs_to_create
 
         fetched_breadcrumbs_names = [breadcrumb.name for breadcrumb in fetched_breadcrumbs]
@@ -688,7 +692,7 @@ def _get_breadcrumb_config(breadcrumb):
     )
 
     Popen(['unzip', TEST_DEPLOYMENTS_FILE_PATH], cwd=TEST_DEPLOYMENTS_FOLDER_PATH)
-    config_file_path = '%s/utils/config.json' % TEST_DEPLOYMENTS_FOLDER_PATH
+    config_file_path = f'{TEST_DEPLOYMENTS_FOLDER_PATH}/utils/config.json'
 
     wait_until(os.path.exists, path=config_file_path)
 
@@ -703,12 +707,12 @@ def _create_private_keys_from_config(config):
         bc_id = bc.get('remote_id')
         address = bc.get('address')
         username = bc.get('username')
-        login_str = '%s@%s' % (username, address)
+        login_str = f'{username}@{address}'
 
         if not pk:
             continue
 
-        key_path = '%s/%s.pem' % (TEST_DEPLOYMENTS_FOLDER_PATH, bc_id)
+        key_path = f'{TEST_DEPLOYMENTS_FOLDER_PATH}/{bc_id}.pem'
         with open(key_path, 'wb') as f:
             f.write(pk)
         os.chmod(key_path, S_IRUSR)
@@ -746,21 +750,21 @@ class TestAlert(APITest):
             return self._get_first_code_execution_alert()
 
         def _test_download_alert_files(code_exec_alert):
-            image_file = '%s/image' % TEST_DEPLOYMENTS_FOLDER_PATH
+            image_file = f'{TEST_DEPLOYMENTS_FOLDER_PATH}/image'
             code_exec_alert.download_image_file(image_file)
-            assert os.path.exists('%s.bin' % image_file)
+            assert os.path.exists(f'{image_file}.bin')
 
-            mem_dump = '%s/mem_dump' % TEST_DEPLOYMENTS_FOLDER_PATH
+            mem_dump = f'{TEST_DEPLOYMENTS_FOLDER_PATH}/mem_dump'
             code_exec_alert.download_memory_dump_file(mem_dump)
-            assert os.path.exists('%s.bin' % mem_dump)
+            assert os.path.exists(f'{mem_dump}.bin')
 
-            netcap_file = '%s/netcap' % TEST_DEPLOYMENTS_FOLDER_PATH
+            netcap_file = f'{TEST_DEPLOYMENTS_FOLDER_PATH}/netcap'
             code_exec_alert.download_network_capture_file(netcap_file)
-            assert os.path.exists('%s.pcap' % netcap_file)
+            assert os.path.exists(f'{netcap_file}.pcap')
 
-            stix_file = '%s/stix' % TEST_DEPLOYMENTS_FOLDER_PATH
+            stix_file = f'{TEST_DEPLOYMENTS_FOLDER_PATH}/stix'
             code_exec_alert.download_stix_file(stix_file)
-            assert os.path.exists('%s.xml' % stix_file)
+            assert os.path.exists(f'{stix_file}.xml')
 
         def _test_delete_single_alert(code_exec_alert):
             code_exec_alert.delete()
@@ -769,9 +773,9 @@ class TestAlert(APITest):
                 self.alerts.get_item(code_exec_alert.id)
 
         def _test_export():
-            export_file = '%s/export' % TEST_DEPLOYMENTS_FOLDER_PATH
+            export_file = f'{TEST_DEPLOYMENTS_FOLDER_PATH}/export'
             self.alerts.export(export_file)
-            assert os.path.exists('%s.csv' % export_file)
+            assert os.path.exists(f'{export_file}.csv')
 
         def _test_delete_filtered_alerts():
             assert len(self.alerts) > 0
@@ -787,13 +791,16 @@ class TestAlert(APITest):
         _test_delete_filtered_alerts()
 
     def _get_first_code_execution_alert(self):
-        alerts = list(self.alerts.filter(filter_enabled=True,
-                                         only_alerts=True,
-                                         alert_types=[CODE_EXECUTION_ALERT_TYPE]))
-        if not alerts:
+        if alerts := list(
+            self.alerts.filter(
+                filter_enabled=True,
+                only_alerts=True,
+                alert_types=[CODE_EXECUTION_ALERT_TYPE],
+            )
+        ):
+            return alerts[0]
+        else:
             raise AlertNotFoundError
-
-        return alerts[0]
 
     def test_params(self):
         assert isinstance(self.alerts.params(), dict)
@@ -825,8 +832,9 @@ class TestEntity(APITest):
 
         no_such_service_data = {
             'id': service.id + 1,
-            'url': '%s%s/' % (self.client.api_urls['service'], service.id + 1)
+            'url': f"{self.client.api_urls['service']}{service.id + 1}/",
         }
+
         no_such_service = Service(self.client, no_such_service_data)
 
         with pytest.raises(ValidationError):
@@ -871,8 +879,12 @@ class TestAlertPolicy(APITest):
 
     def test_crud(self):
         alert_policies = list(self.alert_policies)
-        assert len(alert_policies) > 0
-        assert all([isinstance(alert_policy, AlertPolicy) for alert_policy in alert_policies])
+        assert alert_policies
+        assert all(
+            isinstance(alert_policy, AlertPolicy)
+            for alert_policy in alert_policies
+        )
+
 
         rdp_policies = [alert_policy
                         for alert_policy
@@ -944,11 +956,12 @@ class TestEndpoints(APITest):
             assert len(self.background_tasks) == 0
 
             cidr_mapping = self.cidr_mappings.create(
-                cidr_block='%s/30' % self.lab_endpoint_ip,
+                cidr_block=f'{self.lab_endpoint_ip}/30',
                 deployment_group=1,
                 comments='no comments',
-                active=True
+                active=True,
             )
+
 
             assert len(self.cidr_mappings) == 1
 
@@ -1010,7 +1023,7 @@ class TestEndpoints(APITest):
                 self.deployment_groups.ALL_BREADCRUMBS_DEPLOYMENT_GROUP_ID)
             endpoint.reassign_to_group(all_breadcrumbs_deployment_group)
             assert self.endpoints.get_item(ep.id).deployment_group.id == \
-                   all_breadcrumbs_deployment_group.id
+                       all_breadcrumbs_deployment_group.id
 
             # Clear via entity
             ep.clear_deployment_group()
@@ -1029,7 +1042,7 @@ class TestEndpoints(APITest):
             _test_import_endpoint()
 
             endpoints = list(self.endpoints.filter(self.lab_endpoint_ip))
-            assert len(endpoints) > 0
+            assert endpoints
             self.endpoints.delete_by_endpoints_ids([curr_endpoint.id for curr_endpoint in endpoints])
             assert len(self.endpoints.filter(self.lab_endpoint_ip)) == 0
 
@@ -1038,11 +1051,11 @@ class TestEndpoints(APITest):
             csv_data = self.endpoints.export_filtered()
             pseudo_csv_file = StringIO.StringIO(csv_data)
             csv_data = csv.reader(pseudo_csv_file, delimiter=',')
-            assert any([
+            assert any(
                 len(csv_line) >= 3 and csv_line[2] == self.lab_endpoint_ip
-                for csv_line
-                in csv_data
-            ])
+                for csv_line in csv_data
+            )
+
 
             assert isinstance(self.endpoints.filter_data(), dict)
 
@@ -1052,11 +1065,12 @@ class TestEndpoints(APITest):
             assert len(self.background_tasks) == 0
 
             self.cidr_mappings.create(
-                cidr_block='%s/24' % self.lab_endpoint_ip,
+                cidr_block=f'{self.lab_endpoint_ip}/24',
                 deployment_group=1,
                 comments='no comments',
-                active=True
+                active=True,
             )
+
 
             self.cidr_mappings.generate_all_endpoints()
 
@@ -1157,7 +1171,10 @@ class TestAuditLog(APITest):
         # get obj ids from server
         object_ids = [log_line._param_dict.get("object_ids") for log_line in self.audit_log]
         # and extract them
-        object_ids = list(set([object_id[0] if object_id else None for object_id in object_ids]))
+        object_ids = list(
+            {object_id[0] if object_id else None for object_id in object_ids}
+        )
+
 
         # and make sure you have enough obj ids
         assert len(object_ids) >= 2, "No more than 1 object ID in the system"
@@ -1166,7 +1183,7 @@ class TestAuditLog(APITest):
         usable_object_id = [object_id for object_id in object_ids if object_id][0]
 
         assert len(self.audit_log.filter(object_ids=usable_object_id)) != log_count, \
-            "Object ID filter returned the same amount of logs as the full filter"
+                "Object ID filter returned the same amount of logs as the full filter"
 
     def _test_username_queries(self, log_count):
         user_id = self.client._auth.credentials['id']
@@ -1179,8 +1196,10 @@ class TestAuditLog(APITest):
 
         # check that a bad username doesnt provide any data
         bad_username = user_id * 2
-        assert len(self.audit_log.filter(username=[bad_username])) == 0, \
-            "Logs found for the (probably) nonexistent user {}".format(bad_username)
+        assert (
+            len(self.audit_log.filter(username=[bad_username])) == 0
+        ), f"Logs found for the (probably) nonexistent user {bad_username}"
+
 
         # test users not list ERR
         with pytest.raises(BadParamError):
@@ -1188,18 +1207,21 @@ class TestAuditLog(APITest):
 
     def _test_category_queries(self, log_count):
         # get categories from server
-        categories = list(set([log_line._param_dict.get("category") for log_line in self.audit_log]))
+        categories = list(
+            {log_line._param_dict.get("category") for log_line in self.audit_log}
+        )
+
 
         # and make sure you have enough
         assert len(categories) >= 2, "No more than 1 category in the system"
 
         # make sure the param is OK
         assert len(self.audit_log.filter(category=[categories[0]])) != 0, \
-            "No logs for previously existing filter value"
+                "No logs for previously existing filter value"
 
         # test that you don't get all the alerts when filtering
         assert len(self.audit_log.filter(category=[categories[0]])) != log_count, \
-            "Filtered list returned the same amount of logs as the full filter"
+                "Filtered list returned the same amount of logs as the full filter"
 
         # test categories not list ERR
         with pytest.raises(BadParamError):
@@ -1207,18 +1229,24 @@ class TestAuditLog(APITest):
 
     def _test_event_type_queries(self, log_count):
         # get event_types from server
-        event_types = list(set([log_line._param_dict.get("event_type_label") for log_line in self.audit_log]))
+        event_types = list(
+            {
+                log_line._param_dict.get("event_type_label")
+                for log_line in self.audit_log
+            }
+        )
+
 
         # and make sure you have enough
         assert len(event_types) >= 2, "No more than 1 event type in the system."
 
         # make sure the param is OK
         assert len(self.audit_log.filter(event_type=[event_types[0]])) != 0, \
-            "No logs for previously existing filter value"
+                "No logs for previously existing filter value"
 
         # test that you don't get all the alerts when filtering
         assert len(self.audit_log.filter(event_type=[event_types[0]])) != log_count, \
-            "Filtered list returned the same amount of logs as the full filter"
+                "Filtered list returned the same amount of logs as the full filter"
 
         # test event type not list ERR
         with pytest.raises(BadParamError):

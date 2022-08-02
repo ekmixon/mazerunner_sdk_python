@@ -33,8 +33,7 @@ class Collection(BaseCollection):
 
     def __iter__(self):
         for chunk in self._iter_chunks():
-            for obj in chunk:
-                yield obj
+            yield from chunk
 
     def _iter_chunks(self):
         query_params = self._get_query_params()
@@ -63,16 +62,17 @@ class Collection(BaseCollection):
         :param id: Desired item ID.
         """
         query_params = self._get_query_params()
-        response = self._api_client.api_request(url="{}{}/".format(self._get_url(), id),
-                                                query_params=query_params)
+        response = self._api_client.api_request(
+            url=f"{self._get_url()}{id}/", query_params=query_params
+        )
+
         return self._obj_class(self._api_client, response)
 
     def params(self):
         """
         Request for information about the applicable values for the entity fields.
         """
-        response = self._api_client.api_request("{}{}/".format(self._get_url(), "params"))
-        return response
+        return self._api_client.api_request(f"{self._get_url()}params/")
 
 
 class EditableCollection(Collection):
@@ -131,15 +131,16 @@ class BaseEntity(object):
         :param param_dict: A dict of the instance details.
         """
         self._api_client = api_client
-        self._param_dict = dict()
+        self._param_dict = {}
         self._update_entity_data(param_dict)
         self._update_related_fields()
 
     def __repr__(self):
-        properties = " ".join("%s=%s" % (key, repr(value))
-                              for key, value
-                              in self._param_dict.items())
-        return "<%s: %s>" % (self.__class__.__name__, properties)
+        properties = " ".join(
+            f"{key}={repr(value)}" for key, value in self._param_dict.items()
+        )
+
+        return f"<{self.__class__.__name__}: {properties}>"
 
     def _update_related_fields(self):
         for key, field_type in self.RELATED_COLLECTIONS.iteritems():
@@ -148,8 +149,7 @@ class BaseEntity(object):
                                                  self._param_dict.get(key, [])))
 
         for key, field_type in self.RELATED_FIELDS.iteritems():
-            value = self._param_dict.get(key, None)
-            if value:
+            if value := self._param_dict.get(key, None):
                 setattr(self, key, field_type(self._api_client, value))
 
     def __getattr__(self, item):
@@ -181,8 +181,9 @@ class Entity(BaseEntity):
         self._update_entity_data(response)
 
     def _partial_update_item(self, data, files=None):
-        non_empty_data = {key: value for key, value in data.iteritems() if value}
-        if non_empty_data:
+        if non_empty_data := {
+            key: value for key, value in data.iteritems() if value
+        }:
             response = self._api_client.api_request(url=self.url,
                                                     method="patch",
                                                     data=non_empty_data,
@@ -244,26 +245,26 @@ class Decoy(Entity):
         """
         Start the decoy machine.
         """
-        self._api_client.api_request("{}{}".format(self.url, "power_on/"), "post")
+        self._api_client.api_request(f"{self.url}power_on/", "post")
 
     def recreate(self):
         """
         Recreate the decoy machine.
         """
-        self._api_client.api_request("{}{}".format(self.url, "recreate/"), "post")
+        self._api_client.api_request(f"{self.url}recreate/", "post")
 
     def power_off(self):
         """
         Shut down the decoy machine.
         """
-        self._api_client.api_request("{}{}".format(self.url, "power_off/"), "post")
+        self._api_client.api_request(f"{self.url}power_off/", "post")
 
     def test_dns(self):
         """
         Check whether the decoy is properly registered in the DNS server.
         """
         try:
-            return self._api_client.api_request("{}{}".format(self.url, "test_dns/"), "post")
+            return self._api_client.api_request(f"{self.url}test_dns/", "post")
         except ValidationError as e:
             data = json.loads(e.message)
             errors = data.get("non_field_errors", [])
@@ -277,8 +278,10 @@ class Decoy(Entity):
 
         :param location_with_name: Destination path.
         """
-        self._api_client.request_and_download(url="{}{}".format(self.url, "download/"),
-                                              destination_path="{}.{}".format(location_with_name, "ova"))
+        self._api_client.request_and_download(
+            url=f"{self.url}download/",
+            destination_path=f"{location_with_name}.ova",
+        )
 
 
 class DecoyCollection(EditableCollection):
@@ -366,11 +369,8 @@ class Service(Entity):
         :param kwargs: Additional relevant parameters.
         """
         files = {"zip_file": open(zip_file_path, "rb")} if zip_file_path else None
-        data = dict(
-            name=name,
-            service_type=self.service_type
-        )
-        data.update(kwargs)
+        data = dict(name=name, service_type=self.service_type) | kwargs
+
         self._update_item(data, files=files)
 
     def connect_to_decoy(self, decoy_id):
@@ -380,9 +380,10 @@ class Service(Entity):
         :param decoy_id: The ID of the decoy to which the service should be attached.
         """
         data = dict(decoy_id=decoy_id)
-        self._api_client.api_request(url="{}{}".format(self.url, "connect_to_decoy/"),
-                                     method="post",
-                                     data=data)
+        self._api_client.api_request(
+            url=f"{self.url}connect_to_decoy/", method="post", data=data
+        )
+
         self.load()
 
     def detach_from_decoy(self, decoy_id):
@@ -392,9 +393,10 @@ class Service(Entity):
         :param decoy_id: Decoy ID from which the service should be detached.
         """
         data = dict(decoy_id=decoy_id)
-        self._api_client.api_request(url="{}{}".format(self.url, "detach_from_decoy/"),
-                                     method="post",
-                                     data=data)
+        self._api_client.api_request(
+            url=f"{self.url}detach_from_decoy/", method="post", data=data
+        )
+
         self.load()
 
 
@@ -418,11 +420,8 @@ class ServiceCollection(EditableCollection):
         :param kwargs: Additional relevant parameters.
         """
         files = {"zip_file": open(zip_file_path, "rb")} if zip_file_path else None
-        data = dict(
-            name=name,
-            service_type=service_type
-        )
-        data.update(kwargs)
+        data = dict(name=name, service_type=service_type) | kwargs
+
         return self.create_item(data, files=files)
 
 
@@ -478,8 +477,9 @@ class DeploymentGroup(Entity):
         :param os: OS type (Windows/Linux).
         """
         query_dict = dict(os=os)
-        return self._api_client.api_request(url="{}{}".format(self.url, "check_conflicts/"),
-                                            query_params=query_dict)
+        return self._api_client.api_request(
+            url=f"{self.url}check_conflicts/", query_params=query_dict
+        )
 
     def deploy(self, location_with_name, os, download_type, download_format="ZIP"):
         """
@@ -491,10 +491,12 @@ class DeploymentGroup(Entity):
         :param download_format: Installer format (ZIP/MSI/EXE).
         """
         query_dict = dict(os=os, download_type=download_type, download_format=download_format)
-        file_path = "{}.{}".format(location_with_name, download_format.lower())
-        self._api_client.request_and_download(url="{}{}".format(self.url, "deploy/"),
-                                              destination_path=file_path,
-                                              query_params=query_dict)
+        file_path = f"{location_with_name}.{download_format.lower()}"
+        self._api_client.request_and_download(
+            url=f"{self.url}deploy/",
+            destination_path=file_path,
+            query_params=query_dict,
+        )
 
     def auto_deploy(self, install_method, run_method, username, password, domain="",
                     deploy_on="all"):
@@ -520,7 +522,7 @@ class DeploymentGroup(Entity):
             domain=domain,
             deploy_on=deploy_on
         )
-        self._api_client.api_request("{}{}".format(self.url, "auto_deploy/"), "post", data=data)
+        self._api_client.api_request(f"{self.url}auto_deploy/", "post", data=data)
 
 
 class DeploymentGroupCollection(EditableCollection):
@@ -568,9 +570,11 @@ class DeploymentGroupCollection(EditableCollection):
             install_method=install_method,
             domain=domain
         )
-        return self._api_client.api_request(url="{}{}".format(self._get_url(),
-                                                              "test_deployment_credentials/"),
-                                            method="post", data=data)
+        return self._api_client.api_request(
+            url=f"{self._get_url()}test_deployment_credentials/",
+            method="post",
+            data=data,
+        )
 
     def auto_deploy_groups(self, deployment_groups_ids, install_method, run_method,
                            username, password, domain=None, deploy_on="all"):
@@ -598,7 +602,7 @@ class DeploymentGroupCollection(EditableCollection):
             domain=domain,
             deploy_on=deploy_on
         )
-        url = "{}{}/".format(self._get_url(), "deploy")
+        url = f"{self._get_url()}deploy/"
         return self._api_client.api_request(url=url,
                                             method="post",
                                             data=data)
@@ -611,10 +615,12 @@ class DeploymentGroupCollection(EditableCollection):
         :param os: OS for which the installation is intended.
         :param download_format: Installer format (ZIP/MSI/EXE).
         """
-        file_path = "{}.{}".format(location_with_name, download_format.lower())
-        self._api_client.request_and_download(url="{}{}".format(self._get_url(), "deploy_all/"),
-                                              destination_path=file_path,
-                                              query_params=dict(os=os, download_format=download_format))
+        file_path = f"{location_with_name}.{download_format.lower()}"
+        self._api_client.request_and_download(
+            url=f"{self._get_url()}deploy_all/",
+            destination_path=file_path,
+            query_params=dict(os=os, download_format=download_format),
+        )
 
     def params(self):
         raise NotImplementedError
@@ -660,11 +666,8 @@ class Breadcrumb(Entity):
         :param kwargs: Additional parameters for that breadcrumb. See the params method for \
         information about the options.
         """
-        data = dict(
-            name=name,
-            breadcrumb_type=self.breadcrumb_type
-        )
-        data.update(kwargs)
+        data = dict(name=name, breadcrumb_type=self.breadcrumb_type) | kwargs
+
         self._update_item(data)
 
     def connect_to_service(self, service_id):
@@ -674,9 +677,10 @@ class Breadcrumb(Entity):
         :param service_id: The service ID to which the breadcrumb should be attached.
         """
         data = dict(service_id=service_id)
-        self._api_client.api_request(url="{}{}".format(self.url, "connect_to_service/"),
-                                     method="post",
-                                     data=data)
+        self._api_client.api_request(
+            url=f"{self.url}connect_to_service/", method="post", data=data
+        )
+
         self.load()
 
     def detach_from_service(self, service_id):
@@ -686,9 +690,10 @@ class Breadcrumb(Entity):
         :param service_id: Service ID from which the breadcrumbs should be detached.
         """
         data = dict(service_id=service_id)
-        self._api_client.api_request(url="{}{}".format(self.url, "detach_from_service/"),
-                                     method="post",
-                                     data=data)
+        self._api_client.api_request(
+            url=f"{self.url}detach_from_service/", method="post", data=data
+        )
+
         self.load()
 
     def deploy(self, location_with_name, os, download_type, download_format="ZIP"):
@@ -701,10 +706,12 @@ class Breadcrumb(Entity):
         :param download_format: Installer format (ZIP/EXE/MSI).
         """
         query_dict = dict(os=os, download_type=download_type, download_format=download_format)
-        file_path = "{}.{}".format(location_with_name, download_format.lower())
-        self._api_client.request_and_download(url="{}{}".format(self.url, "deploy/"),
-                                              destination_path=file_path,
-                                              query_params=query_dict)
+        file_path = f"{location_with_name}.{download_format.lower()}"
+        self._api_client.request_and_download(
+            url=f"{self.url}deploy/",
+            destination_path=file_path,
+            query_params=query_dict,
+        )
 
     def add_to_group(self, deployment_group_id):
         """
@@ -717,7 +724,7 @@ class Breadcrumb(Entity):
             raise BadParamError("deployment_group_id must be a number")
 
         data = dict(deployment_group_id=deployment_group_id)
-        self._api_client.api_request("{}{}".format(self.url, "add_to_group/"), "post", data=data)
+        self._api_client.api_request(f"{self.url}add_to_group/", "post", data=data)
         self.load()
 
     def remove_from_group(self, deployment_group_id):
@@ -727,9 +734,10 @@ class Breadcrumb(Entity):
         :param deployment_group_id: Deployment group ID from which the breadcrumb should be removed.
         """
         data = dict(deployment_group_id=deployment_group_id)
-        self._api_client.api_request(url="{}{}".format(self.url, "remove_from_group/"),
-                                     method="post",
-                                     data=data)
+        self._api_client.api_request(
+            url=f"{self.url}remove_from_group/", method="post", data=data
+        )
+
         self.load()
 
     def download_breadcrumb_honeydoc(self, location_with_name):
@@ -738,8 +746,10 @@ class Breadcrumb(Entity):
 
         :param location_with_name: Destination path.
         """
-        self._api_client.request_and_download(url="{}{}".format(self.url, "download_breadcrumb_honeydoc/"),
-                                              destination_path=location_with_name)
+        self._api_client.request_and_download(
+            url=f"{self.url}download_breadcrumb_honeydoc/",
+            destination_path=location_with_name,
+        )
 
 
 class BreadcrumbCollection(EditableCollection):
@@ -765,11 +775,8 @@ class BreadcrumbCollection(EditableCollection):
         for more information.
         """
         files = {file_field_name: open(file_path, "rb")} if file_field_name else None
-        data = dict(
-            name=name,
-            breadcrumb_type=breadcrumb_type
-        )
-        data.update(kwargs)
+        data = dict(name=name, breadcrumb_type=breadcrumb_type) | kwargs
+
         return self.create_item(data, files=files)
 
 
@@ -839,9 +846,11 @@ class AlertProcess(BaseEntity):
         :param destination_path: Location on the disk where you want to save the file.
         """
         self._api_client.request_and_download(
-            url="{url}{download_file_suffix}/".format(url=self.url,
-                                                      download_file_suffix="download_minidump"),
-            destination_path="{}.dump".format(destination_path))
+            url="{url}{download_file_suffix}/".format(
+                url=self.url, download_file_suffix="download_minidump"
+            ),
+            destination_path=f"{destination_path}.dump",
+        )
 
 
 class AlertProcessCollection(Collection):
@@ -885,8 +894,10 @@ class Alert(BaseEntity):
 
         :param location_with_name: Download destination path.
         """
-        self._api_client.request_and_download(url="{}{}".format(self.url, "download_image_file/"),
-                                              destination_path="{}.bin".format(location_with_name))
+        self._api_client.request_and_download(
+            url=f"{self.url}download_image_file/",
+            destination_path=f"{location_with_name}.bin",
+        )
 
     def download_memory_dump_file(self, location_with_name):
         """
@@ -894,8 +905,10 @@ class Alert(BaseEntity):
 
         :param location_with_name: Download destination path.
         """
-        self._api_client.request_and_download(url="{}{}".format(self.url, "download_memory_dump_file/"),
-                                              destination_path="{}.bin".format(location_with_name))
+        self._api_client.request_and_download(
+            url=f"{self.url}download_memory_dump_file/",
+            destination_path=f"{location_with_name}.bin",
+        )
 
     def download_network_capture_file(self, location_with_name):
         """
@@ -903,8 +916,10 @@ class Alert(BaseEntity):
 
         :param location_with_name: Download destination path.
         """
-        self._api_client.request_and_download(url="{}{}".format(self.url, "download_network_capture_file/"),
-                                              destination_path="{}.pcap".format(location_with_name))
+        self._api_client.request_and_download(
+            url=f"{self.url}download_network_capture_file/",
+            destination_path=f"{location_with_name}.pcap",
+        )
 
     def download_stix_file(self, location_with_name):
         """
@@ -912,8 +927,10 @@ class Alert(BaseEntity):
 
         :param location_with_name: Download destination path.
         """
-        self._api_client.request_and_download(url="{}{}".format(self.url, "download_stix_file/"),
-                                              destination_path="{}.xml".format(location_with_name))
+        self._api_client.request_and_download(
+            url=f"{self.url}download_stix_file/",
+            destination_path=f"{location_with_name}.xml",
+        )
 
     def get_processes(self):
         """
@@ -1012,9 +1029,11 @@ class AlertCollection(Collection):
 
         :param location_with_name: Download destination file.
         """
-        self._api_client.request_and_download(url="{}{}".format(self._get_url(), "export/"),
-                                              destination_path="{}.csv".format(location_with_name),
-                                              query_params=self._get_query_params())
+        self._api_client.request_and_download(
+            url=f"{self._get_url()}export/",
+            destination_path=f"{location_with_name}.csv",
+            query_params=self._get_query_params(),
+        )
 
     def delete(self, selected_alert_ids=None, delete_all_filtered=False):
         """
@@ -1039,10 +1058,12 @@ class AlertCollection(Collection):
         data = dict(selected_alert_ids=selected_alert_ids,
                     delete_all_filtered=delete_all_filtered)
         query_params = self._get_query_params()
-        self._api_client.api_request(url="{}{}".format(self._get_url(), "delete_selected/"),
-                                     method="post",
-                                     data=data,
-                                     query_params=query_params)
+        self._api_client.api_request(
+            url=f"{self._get_url()}delete_selected/",
+            method="post",
+            data=data,
+            query_params=query_params,
+        )
 
 
 class ForensicPullerOnDemand(BaseCollection):
@@ -1103,7 +1124,7 @@ class Endpoint(Entity):
         Delete the endpoint.
         """
         base_url = self._api_client.api_urls[self.NAME]
-        url = "%sdelete_selected/?filter_enabled=true" % base_url
+        url = f"{base_url}delete_selected/?filter_enabled=true"
         data = {"selected_endpoints_ids": [self.id]}
         self._api_client.api_request(url, "post", data=data)
 
@@ -1194,9 +1215,8 @@ class EndpointCollection(EditableCollection):
             selected_endpoints_ids=[e.id for e in endpoints])
 
         self._api_client.api_request(
-            "{}{}".format(self._get_url(), "reassign_selected/"),
-            method="POST",
-            data=data)
+            f"{self._get_url()}reassign_selected/", method="POST", data=data
+        )
 
     def clear_deployment_group(self, endpoints):
         """
@@ -1209,13 +1229,12 @@ class EndpointCollection(EditableCollection):
             selected_endpoints_ids=[ep.id for ep in endpoints])
 
         self._api_client.api_request(
-            "{}{}".format(self._get_url(), "reassign_selected/"),
-            method="POST",
-            data=data)
+            f"{self._get_url()}reassign_selected/", method="POST", data=data
+        )
 
     def _get_run_method(self, install_method):
         if install_method not in self.RUN_METHOD_FOR_INSTALL_METHOD:
-            raise InvalidInstallMethodError("Invalid install method: %s" % install_method)
+            raise InvalidInstallMethodError(f"Invalid install method: {install_method}")
         return self.RUN_METHOD_FOR_INSTALL_METHOD[install_method.upper()]
 
     def clean_filtered(self,
@@ -1232,19 +1251,19 @@ class EndpointCollection(EditableCollection):
         :param domain: The domain where that user is registered. Leave blank for local user.
         """
 
-        self._api_client.api_request(url="{}{}".format(self._get_url(), "clean_selected/"),
-                                     method="POST",
-                                     query_params=self._get_query_params(),
-                                     data={
-                                         "clean_all_filtered": True,
-                                         "username": username,
-                                         "password": {
-                                             "value": password
-                                         },
-                                         "domain": domain,
-                                         "run_method": self._get_run_method(install_method),
-                                         "install_method": install_method
-                                     })
+        self._api_client.api_request(
+            url=f"{self._get_url()}clean_selected/",
+            method="POST",
+            query_params=self._get_query_params(),
+            data={
+                "clean_all_filtered": True,
+                "username": username,
+                "password": {"value": password},
+                "domain": domain,
+                "run_method": self._get_run_method(install_method),
+                "install_method": install_method,
+            },
+        )
 
     def clean_by_endpoints_ids(self,
                                endpoints_ids,
@@ -1261,29 +1280,29 @@ class EndpointCollection(EditableCollection):
         :param password: Password for that user.
         :param domain: The domain where that user is registered. Leave blank for local user.
         """
-        self._api_client.api_request(url="{}{}".format(self._get_url(), "clean_selected/"),
-                                     method="POST",
-                                     data={
-                                         "selected_endpoints_ids": endpoints_ids,
-                                         "username": username,
-                                         "password": {
-                                             "value": password
-                                         },
-                                         "domain": domain,
-                                         "run_method": self._get_run_method(install_method),
-                                         "install_method": install_method
-                                     })
+        self._api_client.api_request(
+            url=f"{self._get_url()}clean_selected/",
+            method="POST",
+            data={
+                "selected_endpoints_ids": endpoints_ids,
+                "username": username,
+                "password": {"value": password},
+                "domain": domain,
+                "run_method": self._get_run_method(install_method),
+                "install_method": install_method,
+            },
+        )
 
     def delete_filtered(self):
         """
         Delete all the endpoints matching the filter.
         """
-        self._api_client.api_request(url="{}{}".format(self._get_url(), "delete_selected/"),
-                                     method="POST",
-                                     query_params=self._get_query_params(),
-                                     data={
-                                         "delete_all_filtered": True
-                                     })
+        self._api_client.api_request(
+            url=f"{self._get_url()}delete_selected/",
+            method="POST",
+            query_params=self._get_query_params(),
+            data={"delete_all_filtered": True},
+        )
 
     def delete_by_endpoints_ids(self, endpoints_ids):
         """
@@ -1291,25 +1310,29 @@ class EndpointCollection(EditableCollection):
 
         :param endpoints_ids: List of the endpoint IDs to be deleted.
         """
-        self._api_client.api_request(url="{}{}".format(self._get_url(), "delete_selected/"),
-                                     method="POST",
-                                     data={
-                                         "selected_endpoints_ids": endpoints_ids,
-                                     })
+        self._api_client.api_request(
+            url=f"{self._get_url()}delete_selected/",
+            method="POST",
+            data={
+                "selected_endpoints_ids": endpoints_ids,
+            },
+        )
 
     def export_filtered(self):
         """
         Export all filtered endpoints to CSV.
         """
-        return self._api_client.api_request(url="{}{}".format(self._get_url(), "export/"),
-                                            query_params=self._get_query_params(),
-                                            expect_json_response=False)
+        return self._api_client.api_request(
+            url=f"{self._get_url()}export/",
+            query_params=self._get_query_params(),
+            expect_json_response=False,
+        )
 
     def filter_data(self):
         """
         Get the available values for the endpoint filters.
         """
-        return self._api_client.api_request(url="{}{}".format(self._get_url(), "filter_data/"))
+        return self._api_client.api_request(url=f"{self._get_url()}filter_data/")
 
     def params(self):
         raise NotImplementedError
@@ -1328,7 +1351,7 @@ class BackgroundTask(BaseEntity):
         """
         Stop task.
         """
-        self._api_client.api_request("{}{}".format(self.url, "stop/"), "post")
+        self._api_client.api_request(f"{self.url}stop/", "post")
 
 
 class BackgroundTaskCollection(Collection):
@@ -1365,7 +1388,7 @@ class BackgroundTaskCollection(Collection):
         """
         Acknowledge all tasks with the status 'stopped' or 'complete'.
         """
-        self._api_client.api_request("{}{}".format(self._get_url(), "acknowledge_all/"), "post")
+        self._api_client.api_request(f"{self._get_url()}acknowledge_all/", "post")
 
     def params(self):
         raise NotImplementedError
@@ -1416,7 +1439,7 @@ class AlertPolicyCollection(Collection):
         """
         Reset the 'to_status' of all alert policies to their original system default.
         """
-        self._api_client.api_request("{}{}".format(self._get_url(), "reset_all/"), "post")
+        self._api_client.api_request(f"{self._get_url()}reset_all/", "post")
 
 
 class CIDRMapping(BaseEntity):
@@ -1434,11 +1457,11 @@ class CIDRMapping(BaseEntity):
         """
         Scan the CIDR block and import the endpoints.
         """
-        return self._api_client.api_request("{}{}".format(self.url, "generate_endpoints/"),
-                                            method="post",
-                                            data={
-                                                "reassign": False
-                                            })
+        return self._api_client.api_request(
+            f"{self.url}generate_endpoints/",
+            method="post",
+            data={"reassign": False},
+        )
 
     def delete(self):
         """
@@ -1477,12 +1500,11 @@ class CIDRMappingCollection(UnpaginatedEditableCollection):
         """
         Scan all the active CIDR blocks in the system and import all of their endpoints.
         """
-        return self._api_client.api_request("{}{}".format(self._get_url(),
-                                                          "generate_all_endpoints/"),
-                                            method="post",
-                                            data={
-                                                "reassign": False
-                                            })
+        return self._api_client.api_request(
+            f"{self._get_url()}generate_all_endpoints/",
+            method="post",
+            data={"reassign": False},
+        )
 
     def params(self):
         raise NotImplementedError
@@ -1587,7 +1609,7 @@ class AuditLogLineCollection(Collection):
                                       event_type=event_type,
                                       category=category).iteritems():
             if param and type(param) != list:
-                raise BadParamError("{} has to be a list!".format(param_name))
+                raise BadParamError(f"{param_name} has to be a list!")
         return AuditLogLineCollection(self._api_client,
                                       filter_enabled=filter_enabled,
                                       end_date=end_date,
@@ -1640,10 +1662,7 @@ class APIClient(object):
         verification is skipped.
         """
         self._auth = requests_hawk.HawkAuth(id=api_key, key=api_secret, algorithm="sha256")
-        if certificate is None:
-            self._certificate = False
-        else:
-            self._certificate = certificate
+        self._certificate = False if certificate is None else certificate
         self._base_url = "https://%(host)s" % dict(host=host)
         self._session = requests.Session()
         self.api_urls = self.api_request("/api/v1.0/")
@@ -1686,7 +1705,7 @@ class APIClient(object):
                  for query_param_name, query_param_value
                  in urlparse.parse_qs(parsed.query).items()}
         if query_params:
-            query.update(query_params)
+            query |= query_params
         query_params = query
 
         request_args = dict(

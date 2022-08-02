@@ -32,7 +32,10 @@ def retrieve_files_from_mazerunner(client, dirpath):
         dest_file_name = alert.image_file_name
 
         # Local filepath where we will store our executable
-        dest_file_path = os.path.join(dirpath, "%s_%s" % (alert.decoy["hostname"], dest_file_name))
+        dest_file_path = os.path.join(
+            dirpath, f'{alert.decoy["hostname"]}_{dest_file_name}'
+        )
+
 
         try:
             alert.download_image_file(dest_file_path[:-len(const_bin)])

@@ -59,18 +59,16 @@ class CEFEvent(object):
             'severity': self.severity,
         }
 
-        data.update(self.extra_data)
+        data |= self.extra_data
         return data
 
     @staticmethod
     def _parse_cef_version(cef_version_string):
         version_regex = re.compile('CEF:(?P<cef_ver>\d+)')
-        match = version_regex.search(cef_version_string)
-
-        if not match:
+        if match := version_regex.search(cef_version_string):
+            return match.groupdict()['cef_ver']
+        else:
             raise CEFError('Invalid CEF version')
-
-        return match.groupdict()['cef_ver']
 
     @staticmethod
     def _parse_extra_data(extra_data_string):

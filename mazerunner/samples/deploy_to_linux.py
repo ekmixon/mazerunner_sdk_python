@@ -91,7 +91,7 @@ def deploy_zip_on_endpoints(zipfile, endpoints, deploy_type, deployment_group):
     for endpoint in endpoints:
         try:
             ssh, sftp = init_ssh_client(endpoint['host'], int(endpoint['port']), endpoint['user'], endpoint['pass'])
-            sftp.put(zipfile, '/tmp/{}'.format(ntpath.basename(zipfile)))
+            sftp.put(zipfile, f'/tmp/{ntpath.basename(zipfile)}')
 
             # Install unzip if not found
             install_zip_cmd = 'if [ "" == "`which unzip`" ]; ' \
@@ -105,45 +105,38 @@ def deploy_zip_on_endpoints(zipfile, endpoints, deploy_type, deployment_group):
             run_cmd(ssh, install_zip_cmd)
 
             # unzip the zip file
-            unzip_file_cmd = 'cd /tmp; sudo unzip {} -d {}'.format(
-                ntpath.basename(zipfile),
-                ntpath.basename(zipfile)[:-4]
-            )
+            unzip_file_cmd = f'cd /tmp; sudo unzip {ntpath.basename(zipfile)} -d {ntpath.basename(zipfile)[:-4]}'
+
             run_cmd(ssh, unzip_file_cmd)
 
             # chmod +x the setup file
-            chmod_setup_cmd = 'sudo chmod +x /tmp/{}/setup.sh'.format(
-                ntpath.basename(zipfile)[:-4]
+            chmod_setup_cmd = (
+                f'sudo chmod +x /tmp/{ntpath.basename(zipfile)[:-4]}/setup.sh'
             )
+
             run_cmd(ssh, chmod_setup_cmd)
 
             # run the setup file
-            run_setup_cmd = 'sudo /tmp/{}/setup.sh'.format(
-                ntpath.basename(zipfile)[:-4]
-            )
+            run_setup_cmd = f'sudo /tmp/{ntpath.basename(zipfile)[:-4]}/setup.sh'
             run_cmd(ssh, run_setup_cmd)
 
             # Delete the original zip file
-            rm_file_cmd = 'sudo rm -rf {} {}'.format(zipfile, zipfile[:-4])
+            rm_file_cmd = f'sudo rm -rf {zipfile} {zipfile[:-4]}'
             run_cmd(ssh, rm_file_cmd)
 
-            print("MazeRunner deployment group '{}' {}ed successfully on '{}'.".format(
-                deployment_group,
-                deploy_type,
-                endpoint['host'])
+            print(
+                f"MazeRunner deployment group '{deployment_group}' {deploy_type}ed successfully on '{endpoint['host']}'."
             )
 
+
         except paramiko.ssh_exception.NoValidConnectionsError:
-            print("Unable to {} on '{}:{}' - Unable to connect.".format(
-                deploy_type,
-                endpoint['host'],
-                endpoint['port'])
+            print(
+                f"Unable to {deploy_type} on '{endpoint['host']}:{endpoint['port']}' - Unable to connect."
             )
+
         except paramiko.ssh_exception.AuthenticationException:
-            print("Unable to {} on '{}:{}' - Authentication failed.".format(
-                deploy_type,
-                endpoint['host'],
-                endpoint['port'])
+            print(
+                f"Unable to {deploy_type} on '{endpoint['host']}:{endpoint['port']}' - Authentication failed."
             )
 
 
@@ -155,21 +148,22 @@ def parse_csv_file(csv_file):
     :param csv_file: Name of the CSV file to parse.
     :return: List
     """
-    linux_endpoints_to_deploy = []
-    if os.path.exists(csv_file):
-        with open(csv_file, 'rb') as csvfile:
-            endpoints_reader = csv.reader(csvfile)
-            for row in endpoints_reader:
-                if len(row) != 4:
-                    raise Exception("Each row in the CSV file should contain exactly 4 values. "
-                                    "Got {} instead.".format(len(row)))
-                # Add values to the endpoints list
-                linux_endpoints_to_deploy.append({
-                    HOST_KEY: row[0], PORT_KEY: row[1], USER_KEY: row[2], PASS_KEY: row[3]
-                })
-        return linux_endpoints_to_deploy
-    else:
+    if not os.path.exists(csv_file):
         raise RuntimeError("CSV file not found.")
+    linux_endpoints_to_deploy = []
+    with open(csv_file, 'rb') as csvfile:
+        endpoints_reader = csv.reader(csvfile)
+        for row in endpoints_reader:
+            if len(row) != 4:
+                raise Exception(
+                    f"Each row in the CSV file should contain exactly 4 values. Got {len(row)} instead."
+                )
+
+            # Add values to the endpoints list
+            linux_endpoints_to_deploy.append({
+                HOST_KEY: row[0], PORT_KEY: row[1], USER_KEY: row[2], PASS_KEY: row[3]
+            })
+    return linux_endpoints_to_deploy
 
 
 def main():
@@ -193,13 +187,13 @@ def main():
 
     # Get a new tempfile name
     dep_file = tempfile.mkdtemp()
-    dep_file_full = "{}.zip".format(dep_file)
+    dep_file_full = f"{dep_file}.zip"
 
     # Get the deployment group we want to deploy
     deployment_groups = [deployment_group for deployment_group in client.deployment_groups
                          if deployment_group.name == args.deployment_group]
     if not deployment_groups:
-        raise Exception("Deployment group names '{}' not found.".format(args.deployment_group))
+        raise Exception(f"Deployment group names '{args.deployment_group}' not found.")
     deployment_group = deployment_groups[0]
 
     # Create the deployment file
